@@ -186,7 +186,8 @@ def run_study_buddy(model: genai.GenerativeModel) -> None:
     
     while True:
         try:
-            user_input = console.input("\n[bold cyan]🎓 You:[/bold cyan] ").strip()
+            console.print("[dim italic](Type 'exit' to go back, 'help' for options)[/dim italic]", justify="right")
+            user_input = console.input("[bold cyan]🎓 You:[/bold cyan] ").strip()
             
             if not user_input:
                 continue

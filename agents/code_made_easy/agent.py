@@ -6,6 +6,7 @@ from enum import Enum, auto
 from typing import Optional
 import time
 from core.rich_ui import console, print_header, print_user_msg, print_bot_msg, print_error, print_success, clear_screen, print_menu
+from core.logger import ChatLogger
 
 from .storage import BugStorage
 from .debugger import CodeDebugger
@@ -37,7 +38,13 @@ class CodeMadeEasy:
         self.debugger = CodeDebugger(model, self.storage)
         self.generator = CodeGenerator(model)
         self.rater = CodeRater(model)
+        self.session_messages = []
     
+    def _log_interaction(self, user_text: str, bot_text: str, context: str = ""):
+        """Log Interaction to session history."""
+        self.session_messages.append({"role": "user", "text": f"[{context}] {user_text}"})
+        self.session_messages.append({"role": "model", "text": bot_text})
+
     def _get_multiline_input(self, prompt: str = "") -> str:
         """Helper to get multiline input from user."""
         console.print(f"[bold cyan]{prompt}[/bold cyan]")
@@ -72,6 +79,13 @@ class CodeMadeEasy:
             elif choice == '4':
                 self._view_bug_history()
             elif choice == '0':
+                if self.session_messages:
+                    console.print("\n")
+                    save = console.input("[yellow]💾 Save coding session? (y/n): [/yellow]").strip().lower()
+                    if save in ['yes', 'y']:
+                        title = console.input("[yellow]   Title: [/yellow]").strip()
+                        ChatLogger.save_chat("Code Made Easy", self.session_messages, title if title else "Coding Session")
+                        print_success("Saved!")
                 break
             else:
                 print_error("Invalid choice. Please try again.")
@@ -83,8 +97,8 @@ class CodeMadeEasy:
         print_header("AI Code Debugger", "Find bugs fast")
         
         console.print("[bold]1. Select Language[/bold]")
-        language = console.input("   [cyan]Language (e.g. Python, JS):[/cyan] ").strip()
-        if not language: return
+        language = console.input("   [cyan]Language (or 'exit'):[/cyan] ").strip()
+        if not language or language.lower() in ['exit', 'back']: return
             
         console.print("\n[bold]2. Enter Code[/bold]")
         code = self._get_multiline_input("Paste your broken code below:")
@@ -99,6 +113,7 @@ class CodeMadeEasy:
             analysis = self.debugger.debug_code(code, language)
         
         print_bot_msg(analysis, title="Debugger AI")
+        self._log_interaction(code, analysis, context="Debugger")
         
         console.input("\n[dim]Press Enter to return...[/dim]")
 
@@ -110,6 +125,7 @@ class CodeMadeEasy:
         console.print("[bold]Describe what you want to build:[/bold]")
         console.print("[dim]Example: 'Create a Python script that scrapes headlines from news.com'[/dim]")
         
+        console.print("[dim](Type 'exit' to go back)[/dim]")
         prompt = console.input("\n[cyan]📝 Request:[/cyan] ").strip()
         if not prompt or prompt.lower() in ['exit', 'back']: return
             
@@ -121,6 +137,7 @@ class CodeMadeEasy:
             result = self.generator.generate_code(prompt, language)
         
         print_bot_msg(result, title="Generator AI")
+        self._log_interaction(prompt, result, context=f"Generator ({language})")
         
         # Generator Interact Loop
         while True:
@@ -140,6 +157,7 @@ class CodeMadeEasy:
                     with console.status("[bold green]⚡ Refining code...", spinner="dots"):
                         result = self.generator.refine_code(feedback)
                     print_bot_msg(result, title="Generator AI")
+                    self._log_interaction(feedback, result, context="Refinement")
             elif action == '2' or action.startswith('explain'):
                 question = console.input("[cyan]   What's confusing? [/cyan]").strip()
                 if question:
@@ -147,14 +165,15 @@ class CodeMadeEasy:
                     with console.status("[bold green]🤖 Explaining...", spinner="dots"):
                         result = self.generator.explain_further(question)
                     print_bot_msg(result, title="Generator AI")
+                    self._log_interaction(question, result, context="Explanation")
     
     def _run_rater(self):
         """Run the rater workflow."""
         clear_screen()
         print_header("Rate My Programme", "Code Quality Review")
         
-        language = console.input("[cyan]💻 Programming Language:[/cyan] ").strip()
-        if not language: return
+        language = console.input("[cyan]💻 Programming Language (or 'exit'):[/cyan] ").strip()
+        if not language or language.lower() in ['exit', 'back']: return
             
         code = self._get_multiline_input("Paste your code:")
         if not code.strip(): return
@@ -165,6 +184,7 @@ class CodeMadeEasy:
             review = self.rater.rate_code(code, language)
         
         print_bot_msg(review, title="Code Reviewer")
+        self._log_interaction(code, review, context=f"Rating ({language})")
         
         # Rater Interact Loop
         while True:
@@ -183,6 +203,7 @@ class CodeMadeEasy:
                     with console.status("[bold green]🤖 Answering...", spinner="dots"):
                         response = self.rater.ask_question(question)
                     print_bot_msg(response, title="Code Reviewer")
+                    self._log_interaction(question, response, context="Rating Q&A")
 
     def _view_bug_history(self):
         """View stored bug reports."""
@@ -196,9 +217,7 @@ class CodeMadeEasy:
             console.print(f"[bold]📜 Found {len(bugs)} bug reports:[/bold]")
             for i, bug in enumerate(reversed(bugs), 1):
                 console.print(f"\n[bold cyan]--- Bug #{i} ---[/bold cyan]")
-                console.print(bug.display()) # bug.display() returns text string with borders. might conflict with rich.
-                # Actually bug.display() returns a string. Console.print prints it.
-                # Rich handles box drawing characters fine.
+                console.print(bug.display()) 
         
         console.input("\n[dim]Press Enter to return...[/dim]")
 

@@ -5,6 +5,7 @@ import google.generativeai as genai
 from typing import Optional, List, Dict
 import time
 from core.rich_ui import console, print_header, print_user_msg, print_bot_msg, print_error, print_success, clear_screen, print_menu
+from core.logger import ChatLogger
 
 class FutureSimulator:
     """Future Simulator - Decision Analysis Bot"""
@@ -61,6 +62,7 @@ TONE & STYLE:
 def run_future_simulator(model: genai.GenerativeModel) -> None:
     """Main entry point for Future Simulator."""
     simulator = FutureSimulator(model)
+    session_messages = []
     
     clear_screen()
     print_header("Future Simulator", "Analyze Timelines")
@@ -68,7 +70,7 @@ def run_future_simulator(model: genai.GenerativeModel) -> None:
     while True:
         try:
             console.print("\n[bold cyan]🤔 What decision acts as the turning point?[/bold cyan]")
-            console.print("[dim](Type 'back' to exit)[/dim]")
+            console.print("[dim italic](Type 'exit' to return to menu)[/dim italic]")
             
             decision = console.input("[bold white]   Decision: [/bold white]").strip()
             
@@ -80,8 +82,15 @@ def run_future_simulator(model: genai.GenerativeModel) -> None:
                 continue
             
             if decision.lower() in ['exit', 'quit', 'back', 'menu']:
+                if session_messages:
+                    save = console.input("[yellow]💾 Save analysis history? (y/n): [/yellow]").strip().lower()
+                    if save in ['yes', 'y']:
+                        title = console.input("[yellow]   Title: [/yellow]").strip()
+                        ChatLogger.save_chat("Future Simulator", session_messages, title if title else "Simulation")
+                        print_success("Saved!")
                 break
 
+            session_messages.append({"role": "user", "text": decision})
             print_user_msg(f"Analyze: {decision}")
             
             with console.status("[bold magenta]🔮 Calculating probability vectors...[/bold magenta]", spinner="material"):
@@ -89,6 +98,7 @@ def run_future_simulator(model: genai.GenerativeModel) -> None:
                 response = simulator.simulate_decision(decision)
             
             print_bot_msg(response, title="Projected Outcomes")
+            session_messages.append({"role": "model", "text": response})
             
             console.print("\n[dim]─" * 40 + "[/dim]")
             

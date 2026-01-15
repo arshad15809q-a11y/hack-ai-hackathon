@@ -6,6 +6,7 @@ from typing import Optional, List, Dict
 import random
 import time
 from core.rich_ui import console, print_header, print_user_msg, print_bot_msg, print_error, print_success, clear_screen, print_menu
+from core.logger import ChatLogger
 
 class ExplainLikeX:
     """Explain Like X - The Creative Explanation Engine"""
@@ -64,6 +65,7 @@ It should sound like it was created by someone who genuinely lives in or embodie
 def run_explain_like_x(model: genai.GenerativeModel) -> None:
     """Main entry point for Explain Like X."""
     engine = ExplainLikeX(model)
+    session_messages = []
     
     clear_screen()
     print_header("Explain Like X", "Any Topic. Any Persona.")
@@ -71,7 +73,7 @@ def run_explain_like_x(model: genai.GenerativeModel) -> None:
     while True:
         try:
             console.print("\n[bold cyan]📝 What topic do you want explained?[/bold cyan]")
-            console.print("[dim](Type 'back' to exit)[/dim]")
+            console.print("[dim italic](Type 'exit' to go back)[/dim italic]")
             topic = console.input("[bold white]   Topic: [/bold white]").strip()
             
             if not topic: continue
@@ -82,6 +84,12 @@ def run_explain_like_x(model: genai.GenerativeModel) -> None:
                 continue
 
             if topic.lower() in ['exit', 'quit', 'back', 'menu']:
+                if session_messages:
+                    save = console.input("[yellow]💾 Save explanations? (y/n): [/yellow]").strip().lower()
+                    if save in ['yes', 'y']:
+                        title = console.input("[yellow]   Title: [/yellow]").strip()
+                        ChatLogger.save_chat("Explain Like X", session_messages, title if title else "Explanations")
+                        print_success("Saved!")
                 break
 
             console.print("\n[bold magenta]🎭 Choose a Style or Persona:[/bold magenta]")
@@ -99,12 +107,15 @@ def run_explain_like_x(model: genai.GenerativeModel) -> None:
                 style = random.choice(engine.STYLES)
                 console.print(f"[bold magenta]🎲 Random Style: {style}[/bold magenta]")
 
-            print_user_msg(f"Explain '{topic}' as '{style}'")
+            user_req = f"Explain '{topic}' as '{style}'"
+            print_user_msg(user_req)
+            session_messages.append({"role": "user", "text": user_req})
             
             with console.status(f"[bold magenta]🎭 {style} is thinking...", spinner="monkey"):
                 response = engine.get_explanation(topic, style)
             
             print_bot_msg(response, title=style)
+            session_messages.append({"role": "model", "text": response})
             
             console.print("\n[dim]─" * 40 + "[/dim]")
             
